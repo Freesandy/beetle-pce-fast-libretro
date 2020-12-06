@@ -29,30 +29,30 @@ extern "C" {
 struct retro_core_option_definition option_defs_us[] = {
    {
       "pce_fast_palette",
-      "Colour Palette",
-      "Composite tries to recreate the original console output and can show more details in some games.",
+      "调色板",
+      "复合视频模式尝试重建原始硬件的输出色彩, 在某些游戏上可以显示更多的细节.",
       {
          { "RGB", NULL },
-         { "Composite", NULL },
+         { "Composite", "复合视频" },
          { NULL, NULL},
       },
       "RGB"
    },
    {
       "pce_fast_cdimagecache",
-      "CD Image Cache (Restart)",
-      "Loads the complete image in memory at startup. Can potentially decrease loading times at the cost of increased startup time.",
+      "CD镜像缓存(需重启)",
+      "读取CD镜像到内存, 首次载入需要较长时间.",
       {
-         { "disabled", NULL },
-         { "enabled", NULL },
+         { "disabled",  "禁用" },
+         { "enabled",  "启用" },
          { NULL, NULL },
       },
       "disabled"
    },
    {
       "pce_fast_cdbios",
-      "CD BIOS (Restart)",
-      "Select which PC Engine CD BIOS to use.",
+      "CD BIOS (R需重启)",
+      "大部分游戏可以在'System Card 3'下运行，少数未授权游戏需要'Games Express'。",
       {
          { "System Card 3", NULL },
          { "Games Express", NULL },
@@ -66,19 +66,19 @@ struct retro_core_option_definition option_defs_us[] = {
    },
    {
       "pce_nospritelimit",
-      "No Sprite Limit",
-      "Remove 16-sprites-per-scanline hardware limit.",
+      "无活动块限制",
+      "移除每扫描线16个活动块的硬件限制.",
       {
-         { "disabled", NULL },
-         { "enabled", NULL },
+         { "disabled",  "禁用" },
+         { "enabled",  "启用" },
          { NULL, NULL },
       },
-      "disabled"
+      "enabled"
    },
    {
       "pce_ocmultiplier",
-      "CPU Overclock Multiplier (Restart)",
-      "Overclock the emulated CPU.",
+      "CPU超频倍率(需重启)",
+      "较高的值可以减少游戏拖慢现象, 警告：可能导致错误或崩溃.",
       {
          { "1", NULL },
          { "2", NULL },
@@ -100,20 +100,20 @@ struct retro_core_option_definition option_defs_us[] = {
    },
    {
       "pce_fast_frameskip",
-      "Frameskip",
-      "Skip frames to avoid audio buffer under-run (crackling). Improves performance at the expense of visual smoothness. 'Auto' skips frames when advised by the frontend. 'Manual' utilises the 'Frameskip Threshold (%)' setting.",
+      "跳帧",
+      "跳过帧以避免音频缓冲区欠载(破音). 以牺牲视觉平滑度为代价来提高性能. '自动'会根据前端建议跳帧. '手动'使用'跳帧阈值(％)'设置. ",
       {
-         { "disabled", NULL },
-         { "auto",     "Auto" },
-         { "manual",   "Manual" },
+         { "disabled",  "禁用" },
+         { "auto",     "自动" },
+         { "manual",   "手动" },
          { NULL, NULL },
       },
       "disabled"
    },
    {
       "pce_fast_frameskip_threshold",
-      "Frameskip Threshold (%)",
-      "When 'Frameskip' is set to 'Manual', specifies the audio buffer occupancy threshold (percentage) below which frames will be skipped. Higher values reduce the risk of crackling by causing frames to be dropped more frequently.",
+      "跳帧阈值(％)",
+      "当'跳帧设置为'手动'时, 当指定音频缓冲器占用阈值(百分比)低于该阈值将跳帧. 较高的值通过更频繁的跳帧来降低破音的几率.",
       {
          { "15", NULL },
          { "18", NULL },
@@ -137,8 +137,8 @@ struct retro_core_option_definition option_defs_us[] = {
    },
    {
       "pce_hoverscan",
-      "Horizontal Overscan (352 Width Mode Only)",
-      "Modify the horizontal overscan.",
+      "水平过扫描(仅352宽度模式)",
+      "修改水平过扫描.",
       {
          { "300", NULL },
          { "302", NULL },
@@ -173,8 +173,8 @@ struct retro_core_option_definition option_defs_us[] = {
    },
    {
       "pce_initial_scanline",
-      "Initial scanline",
-      "Initial scanline.",
+      "初始扫描线"",
+      "第一条渲染的扫描的扫描线, 高于0的值会剪切屏幕顶部.",
       {
          { "0", NULL },
          { "1", NULL },
@@ -223,8 +223,8 @@ struct retro_core_option_definition option_defs_us[] = {
    },
    {
       "pce_last_scanline",
-      "Last scanline",
-      "Adjust last display scanline.",
+      "最后一条扫描线",
+      "最后一条渲染的扫描线, 低于242的值会剪切屏幕底部.",
       {
          { "208", NULL },
          { "209", NULL },
@@ -267,19 +267,19 @@ struct retro_core_option_definition option_defs_us[] = {
    },
    {
       "pce_disable_softreset",
-      "Disable Soft Reset (RUN+SELECT)",
-      "If set, when RUN+SEL are pressed simultaneously, disable both buttons temporarily.",
+      "禁用软重置(RUN + SELECT)",
+      "如果设置, 则同时按下RUN + SEL时, 暂时禁用两个按钮.",
       {
-          { "disabled", NULL },
-          { "enabled", NULL },
+          { "disabled",  "禁用" },
+          { "enabled",  "启用" },
           { NULL, NULL },
       },
       "disabled"
    },
    {
       "pce_cdspeed",
-      "(CD) CD Speed",
-      "Set the speed of the emulated CD drive.",
+      "(CD) CD 读速",
+      "置更快的载入速度,但是可能会使一些游戏产生问题.",
       {
          { "1", NULL },
          { "2", NULL },
@@ -291,8 +291,8 @@ struct retro_core_option_definition option_defs_us[] = {
    },
    {
       "pce_cddavolume",
-      "(CD) CDDA Volume %",
-      "Modify CDDA Volume %.",
+      "(CD) CDDA音量%",
+      "只应用于CD游戏, 音量值设置过高可能会导致音频削峰.",
       {
          { "0", NULL },
          { "10", NULL },
@@ -321,8 +321,8 @@ struct retro_core_option_definition option_defs_us[] = {
    },
    {
       "pce_adpcmvolume",
-      "(CD) ADPCM Volume %",
-      "Modify ADPCM Volume %.",
+      "(CD) ADPCM音量%",
+      "只应用于CD游戏, 音量值设置过高可能会导致音频削峰.",
       {
          { "0", NULL },
          { "10", NULL },
@@ -351,8 +351,8 @@ struct retro_core_option_definition option_defs_us[] = {
    },
    {
       "pce_cdpsgvolume",
-      "(CD) PSG Volume %",
-      "Modify CD PSG Volume %.",
+      "(CD) PSG音量%",
+      "只应用于CD游戏, 音量值设置过高可能会导致音频削峰.",
       {
          { "0", NULL },
          { "10", NULL },
@@ -381,8 +381,8 @@ struct retro_core_option_definition option_defs_us[] = {
    },
    {
       "pce_sound_channel_0_volume",
-      "PSG Sound Channel 0 Volume %",
-      "Modify PSG Sound Channel 0 Volume %",
+      "PSG音道0音量%",
+      "修改对应的PSG音道音量.",
       {
          { "0", NULL },
          { "10", NULL },
@@ -401,8 +401,8 @@ struct retro_core_option_definition option_defs_us[] = {
    },
    {
       "pce_sound_channel_1_volume",
-      "PSG Sound Channel 1 Volume %",
-      "Modify PSG Sound Channel 1 Volume %",
+      "PSG音道1音量%",
+      "修改对应的PSG音道音量.",
       {
          { "0", NULL },
          { "10", NULL },
@@ -421,8 +421,8 @@ struct retro_core_option_definition option_defs_us[] = {
    },
    {
       "pce_sound_channel_2_volume",
-      "PSG Sound Channel 2 Volume %",
-      "Modify PSG Sound Channel 2 Volume %",
+      "PSG音道2音量%",
+      "修改对应的PSG音道音量.",
       {
          { "0", NULL },
          { "10", NULL },
@@ -441,8 +441,8 @@ struct retro_core_option_definition option_defs_us[] = {
    },
    {
       "pce_sound_channel_3_volume",
-      "PSG Sound Channel 3 Volume %",
-      "Modify PSG Sound Channel 3 Volume %",
+      "PSG音道3音量%",
+      "修改对应的PSG音道音量.",
       {
          { "0", NULL },
          { "10", NULL },
@@ -461,8 +461,8 @@ struct retro_core_option_definition option_defs_us[] = {
    },
    {
       "pce_sound_channel_4_volume",
-      "PSG Sound Channel 4 Volume %",
-      "Modify PSG Sound Channel 4 Volume %",
+      "PSG音道4音量%",
+      "修改对应的PSG音道音量.",
       {
          { "0", NULL },
          { "10", NULL },
@@ -481,8 +481,8 @@ struct retro_core_option_definition option_defs_us[] = {
    },
    {
       "pce_sound_channel_5_volume",
-      "PSG Sound Channel 5 Volume %",
-      "Modify PSG Sound Channel 5 Volume %",
+      "PSG音道5音量%",
+      "修改对应的PSG音道音量.",
       {
          { "0", NULL },
          { "10", NULL },
@@ -501,8 +501,8 @@ struct retro_core_option_definition option_defs_us[] = {
    },
    {
       "pce_mouse_sensitivity",
-      "Mouse Sensitivity",
-      "Configure the PCE Mouse device type's sensitivity.",
+      "鼠标灵敏度",
+      "配置PCE鼠标设备类型的敏感度.",
       {
          { "0.25", NULL },
          { "0.50", NULL },
@@ -530,8 +530,8 @@ struct retro_core_option_definition option_defs_us[] = {
    },
    {
       "pce_turbo_delay",
-      "Turbo Delay",
-      "Adjust turbo delay.",
+      "连发延迟",
+      "数字越大, 连发越慢.",
       {
          { "1",  NULL },
          { "2",  NULL },
@@ -554,22 +554,22 @@ struct retro_core_option_definition option_defs_us[] = {
    },
    {
       "pce_turbo_toggling",
-      "Turbo ON/OFF Toggle",
-      "Enables Turbo ON/OFF inputs.",
+      "连发 ON / OFF切换",
+      "启用连发 ON / OFF输入.",
       {
-         { "disabled", NULL },
-         { "enabled", NULL },
+         { "disabled",  "禁用" },
+         { "enabled",  "启用" },
          { NULL, NULL },
       },
       "disabled"
    },
    {
       "pce_turbo_toggle_hotkey",
-      "Alternate Turbo Hotkey",
-      "Enables Alternate Turbo ON/OFF inputs. You can avoid remapping Button III and IV when switching to 6-button gamepad mode with this.",
+      "备用连发热键",
+      "启用备用连发 ON / OFF输入. 此切换到6键游戏手柄模式时，可以避免重新映射Button III和IV。",
       {
-         { "disabled", NULL },
-         { "enabled", NULL },
+         { "disabled",  "禁用" },
+         { "enabled",  "启用" },
          { NULL, NULL },
       },
       "disabled"
