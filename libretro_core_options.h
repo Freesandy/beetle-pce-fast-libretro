@@ -51,7 +51,7 @@ struct retro_core_option_definition option_defs_us[] = {
    },
    {
       "pce_fast_cdbios",
-      "CD BIOS (R需重启)",
+      "CD BIOS (需重启)",
       "大部分游戏可以在'System Card 3'下运行，少数未授权游戏需要'Games Express'。",
       {
          { "System Card 3", NULL },
