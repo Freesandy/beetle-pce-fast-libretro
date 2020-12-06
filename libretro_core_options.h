@@ -173,7 +173,7 @@ struct retro_core_option_definition option_defs_us[] = {
    },
    {
       "pce_initial_scanline",
-      "初始扫描线"",
+      "初始扫描线",
       "第一条渲染的扫描的扫描线, 高于0的值会剪切屏幕顶部.",
       {
          { "0", NULL },
