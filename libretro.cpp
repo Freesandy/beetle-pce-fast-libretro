@@ -57,7 +57,7 @@ static bool IsPopulous;
 
 uint8 SaveRAM[2048];
 
-static bool old_cdimagecache = false;
+static bool cdimagecache = false;
 static bool use_palette = false;
 
 std::string setting_pce_fast_cdbios = "syscard3.pce";
@@ -608,7 +608,7 @@ extern ArcadeCard *arcade_card; // Bah, lousy globals.
 
 static Blip_Buffer sbuf[2];
 
-bool PCE_ACEnabled;
+bool PCE_ACEnabled = false;
 
 // Statically allocated for speed...or something.
 uint8 ROMSpace[0x88 * 8192 + 8192];	// + 8192 for PC-as-pointer safety padding
@@ -1362,11 +1362,6 @@ extern "C" int StateAction(StateMem *sm, int load, int data_only)
    ret &= INPUT_StateAction(sm, load, data_only);
    ret &= HuC_StateAction(sm, load, data_only);
 
-   if(load)
-   {
-
-   }
-
    return(ret);
 }
 
@@ -1432,18 +1427,19 @@ MDFNGI EmulatedPCE_Fast =
  2,     // Number of output sound channels
 };
 
-static bool ReadM3U(std::vector<std::string> &file_list, std::string path, unsigned depth = 0)
+static void ReadM3U(std::vector<std::string> &file_list, std::string path, unsigned depth = 0)
 {
    std::string dir_path;
    char linebuf[2048];
-   FILE *fp = fopen(path.c_str(), "rb");
+   RFILE *fp = filestream_open(path.c_str(), RETRO_VFS_FILE_ACCESS_READ,
+         RETRO_VFS_FILE_ACCESS_HINT_NONE);
 
    if (!fp)
-      return false;
+      return;
 
    MDFN_GetFilePathComponents(path, &dir_path);
 
-   while(fgets(linebuf, sizeof(linebuf), fp))
+   while(filestream_gets(fp, linebuf, sizeof(linebuf)) != NULL)
    {
       std::string efp;
 
@@ -1460,15 +1456,13 @@ static bool ReadM3U(std::vector<std::string> &file_list, std::string path, unsig
          if(efp == path)
          {
             log_cb(RETRO_LOG_ERROR, "M3U at \"%s\" references self.\n", efp.c_str());
-            fclose(fp);
-            return false;
+            goto end;
          }
 
          if(depth == 99)
          {
             log_cb(RETRO_LOG_ERROR, "M3U load recursion too deep!\n");
-            fclose(fp);
-            return false;
+            goto end;
          }
 
          ReadM3U(file_list, efp, depth++);
@@ -1477,9 +1471,8 @@ static bool ReadM3U(std::vector<std::string> &file_list, std::string path, unsig
          file_list.push_back(efp);
    }
 
-   fclose(fp);
-
-   return true;
+end:
+   filestream_close(fp);
 }
 
  static std::vector<CDIF *> CDInterfaces;	// FIXME: Cleanup on error out.
@@ -1494,18 +1487,17 @@ static bool MDFNI_LoadCD(const char *devicename)
    {
       std::vector<std::string> file_list;
 
-      if (ReadM3U(file_list, devicename))
-         ret = true;
+      ReadM3U(file_list, devicename);
 
       for(unsigned i = 0; i < file_list.size(); i++)
       {
-         CDIF *cdif = CDIF_Open(file_list[i].c_str(), false);
+         CDIF *cdif = CDIF_Open(file_list[i].c_str(), cdimagecache);
          CDInterfaces.push_back(cdif);
       }
    }
    else
    {
-      CDIF *cdif = CDIF_Open(devicename, false);
+      CDIF *cdif = CDIF_Open(devicename, cdimagecache);
 
       if (cdif)
       {
@@ -1585,13 +1577,19 @@ static retro_audio_sample_batch_t audio_batch_cb;
 static retro_environment_t environ_cb;
 static retro_input_poll_t input_poll_cb;
 static retro_input_state_t input_state_cb;
-static double last_sound_rate;
+static double last_sound_rate = 0.0;
 
 static bool libretro_supports_bitmasks = false;
 
-static MDFN_Surface *surf;
+static MDFN_Surface *surf = NULL;
 
-static bool failed_init;
+static bool failed_init = false;
+
+static unsigned video_width = 0;
+static unsigned video_height = 0;
+
+static uint64_t video_frames = 0;
+static uint64_t audio_frames = 0;
 
 #include "mednafen/pce_fast/pcecd.h"
 
@@ -1713,6 +1711,7 @@ void retro_init(void)
 
    check_system_specs();
 
+   libretro_supports_bitmasks = false;
    if (environ_cb(RETRO_ENVIRONMENT_GET_INPUT_BITMASKS, NULL))
       libretro_supports_bitmasks = true;
 
@@ -1724,6 +1723,15 @@ void retro_init(void)
    retro_audio_buff_underrun  = false;
    audio_latency              = 0;
    update_audio_latency       = false;
+
+   last_sound_rate = 0.0;
+   video_width = 0;
+   video_height = 0;
+   video_frames = 0;
+   audio_frames = 0;
+
+   lastchar = 0;
+   failed_init = false;
 }
 
 void retro_reset(void)
@@ -1769,38 +1777,33 @@ static void check_variables(bool first_run)
    struct retro_variable var = {0};
    unsigned frameskip_type_prev;
 
-   var.key = "pce_fast_cdimagecache";
-
-   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   if (first_run)
    {
-      bool cdimage_cache = true;
+      var.key      = "pce_fast_cdimagecache";
+      cdimagecache = false;
 
-      if (strcmp(var.value, "enabled") == 0)
-         cdimage_cache = true;
-      else if (strcmp(var.value, "disabled") == 0)
-         cdimage_cache = false;
+      if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+         if (strcmp(var.value, "enabled") == 0)
+            cdimagecache = true;
 
-      if (cdimage_cache != old_cdimagecache)
-         old_cdimagecache = cdimage_cache;
-   }
+      var.key                 = "pce_fast_cdbios";
+      setting_pce_fast_cdbios = "syscard3.pce";
 
-   var.key = "pce_fast_cdbios";
-
-   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-   {
-      if (strcmp(var.value, "System Card 3") == 0)
-         setting_pce_fast_cdbios = "syscard3.pce";
-      else if (strcmp(var.value, "System Card 2") == 0)
-         setting_pce_fast_cdbios = "syscard2.pce";
-      else if (strcmp(var.value, "System Card 1") == 0)
-         setting_pce_fast_cdbios = "syscard1.pce";
-      else if (strcmp(var.value, "Games Express") == 0)
-         setting_pce_fast_cdbios = "gexpress.pce";
-      else if (strcmp(var.value, "System Card 3 US") == 0)
-         setting_pce_fast_cdbios = "syscard3u.pce";
-      else if (strcmp(var.value, "System Card 2 US") == 0)
-         setting_pce_fast_cdbios = "syscard2u.pce";
-
+      if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+      {
+         if (strcmp(var.value, "System Card 3") == 0)
+            setting_pce_fast_cdbios = "syscard3.pce";
+         else if (strcmp(var.value, "System Card 2") == 0)
+            setting_pce_fast_cdbios = "syscard2.pce";
+         else if (strcmp(var.value, "System Card 1") == 0)
+            setting_pce_fast_cdbios = "syscard1.pce";
+         else if (strcmp(var.value, "Games Express") == 0)
+            setting_pce_fast_cdbios = "gexpress.pce";
+         else if (strcmp(var.value, "System Card 3 US") == 0)
+            setting_pce_fast_cdbios = "syscard3u.pce";
+         else if (strcmp(var.value, "System Card 2 US") == 0)
+            setting_pce_fast_cdbios = "syscard2u.pce";
+      }
    }
 
    var.key = "pce_nospritelimit";
@@ -2240,9 +2243,6 @@ static void update_input(void)
    }
 }
 
-static uint64_t video_frames = 0;
-static uint64_t audio_frames = 0;
-
 void update_geometry(unsigned width, unsigned height)
 {
    struct retro_system_av_info system_av_info;
@@ -2259,7 +2259,6 @@ void retro_run(void)
    static bool last_palette_format;
    static int16_t sound_buf[0x10000];
    static int32_t rects[FB_HEIGHT];
-   static unsigned width, height;
    EmulateSpecStruct spec;
    bool resolution_changed = false;
    int skip_frame          = 0;
@@ -2360,16 +2359,16 @@ void retro_run(void)
    spec.SoundBufSize = spec.SoundBufSizeALMS + SoundBufSize;
 
    if (skip_frame)
-      video_cb(NULL, width, height, FB_WIDTH * 2);
+      video_cb(NULL, video_width, video_height, FB_WIDTH * 2);
    else
    {
-      if (width  != spec.DisplayRect.w || height != spec.DisplayRect.h)
+      if (video_width  != spec.DisplayRect.w || video_height != spec.DisplayRect.h)
          resolution_changed = true;
 
-      width  = spec.DisplayRect.w;
-      height = spec.DisplayRect.h;
+      video_width  = spec.DisplayRect.w;
+      video_height = spec.DisplayRect.h;
 
-      video_cb(surf->pixels + surf->pitch * spec.DisplayRect.y, width, height, FB_WIDTH * 2);
+      video_cb(surf->pixels + surf->pitch * spec.DisplayRect.y, video_width, video_height, FB_WIDTH * 2);
    }
 
    audio_batch_cb(spec.SoundBuf, spec.SoundBufSize);
@@ -2386,11 +2385,11 @@ void retro_run(void)
       for (c = 0; c < 6; c++)
          psg->SetChannelUserVolume(c, psg_channels_volume[c]);
 
-      update_geometry(width, height);
+      update_geometry(video_width, video_height);
    }
+   else if (resolution_changed)
+      update_geometry(video_width, video_height);
 
-   if (resolution_changed)
-      update_geometry(width, height);
    video_frames++;
    audio_frames += spec.SoundBufSize;
 }
@@ -2422,6 +2421,10 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
 
 void retro_deinit()
 {
+   if (surf->pixels)
+      free(surf->pixels);
+   surf->pixels = NULL;
+
    if (surf)
       free(surf);
    surf = NULL;
@@ -2433,8 +2436,6 @@ void retro_deinit()
       log_cb(RETRO_LOG_INFO, "[%s]: Estimated FPS: %.5f\n",
             MEDNAFEN_CORE_NAME, (double)video_frames * 44100 / audio_frames);
    }
-
-   libretro_supports_bitmasks = false;
 }
 
 unsigned retro_get_region(void)

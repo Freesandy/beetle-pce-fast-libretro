@@ -20,6 +20,9 @@ ifeq ($(platform),)
    else ifneq ($(findstring Darwin,$(shell uname -s)),)
       platform = osx
       arch = intel
+      ifeq ($(shell uname -p),arm64)
+         arch = arm
+      endif
       ifeq ($(shell uname -p),powerpc)
          arch = ppc
       endif
@@ -90,6 +93,8 @@ ifneq (,$(findstring unix,$(platform)))
          FLAGS += -DARM -marm -mcpu=cortex-a7 -mfpu=neon-vfpv4 -mfloat-abi=hard
       else ifneq (,$(findstring rpi3,$(platform)))
          FLAGS += -DARM -marm -mcpu=cortex-a53 -mfpu=neon-fp-armv8 -mfloat-abi=hard
+      else ifneq (,$(findstring rpi4_64,$(platform)))
+         FLAGS += -DARM -march=armv8-a+crc+simd -mtune=cortex-a72
       endif
    endif
    
@@ -126,6 +131,25 @@ else ifeq ($(platform), classic_armv7_a7)
 	endif
 #######################################
 
+# (armv8 a35, hard point, neon based) ###
+# PlayStation Classic 
+else ifeq ($(platform), classic_armv8_a35)
+	TARGET := $(TARGET_NAME)_libretro.so
+	fpic := -fPIC
+	SHARED := -shared -Wl,--no-undefined -Wl,--version-script=link.T
+	CFLAGS += -DARM -Ofast \
+	-fuse-linker-plugin \
+	-fno-stack-protector -fno-ident -fomit-frame-pointer \
+	-fmerge-all-constants -ffast-math -funroll-all-loops \
+	-marm -mcpu=cortex-a35 -mfpu=neon-fp-armv8 -mfloat-abi=hard
+	CXXFLAGS += $(CFLAGS)
+	CPPFLAGS += $(CFLAGS)
+	HAVE_NEON = 1
+	ARCH = arm
+	LDFLAGS += -lrt
+	LDFLAGS += -marm -mcpu=cortex-a35 -mfpu=neon-fp-armv8 -mfloat-abi=hard -Ofast -flto -fuse-linker-plugin
+######################################
+
 # OS X
 else ifeq ($(platform), osx)
    TARGET := $(TARGET_NAME)_libretro.dylib
@@ -137,7 +161,21 @@ else ifeq ($(platform), osx)
    endif
    OSXVER = `sw_vers -productVersion | cut -d. -f 2`
    OSX_LT_MAVERICKS = `(( $(OSXVER) <= 9)) && echo "YES"`
-   fpic += -mmacosx-version-min=10.7
+   MINVERSION += -mmacosx-version-min=10.7
+ifeq ($(OSX_LT_MAVERICKS),"YES")
+else
+	fpic += -stdlib=libc++
+endif
+   ifeq ($(CROSS_COMPILE),1)
+	TARGET_RULE   = -target $(LIBRETRO_APPLE_PLATFORM) -isysroot $(LIBRETRO_APPLE_ISYSROOT)
+	CFLAGS   += $(TARGET_RULE)
+	CPPFLAGS += $(TARGET_RULE)
+	CXXFLAGS += $(TARGET_RULE)
+	LDFLAGS  += $(TARGET_RULE)
+	MINVERSION =
+   endif
+   
+   fpic += $(MINVERSION)
 
 # iOS
 else ifneq (,$(findstring ios,$(platform)))
@@ -421,17 +459,18 @@ PATH := $(PATH):$(shell IFS=$$'\n'; cygpath "$(VS100COMNTOOLS)../IDE")
 LIB := $(shell IFS=$$'\n'; cygpath "$(VS100COMNTOOLS)../../VC/lib/amd64")
 INCLUDE := $(shell IFS=$$'\n'; cygpath "$(VS100COMNTOOLS)../../VC/include")
 
-WindowsSdkDir := $(shell reg query "HKLM\SOFTWARE\Microsoft\Microsoft SDKs\Windows\v7.0A" -v "InstallationFolder" | grep -o '[A-Z]:\\.*')lib/x64
-WindowsSdkDir ?= $(shell reg query "HKLM\SOFTWARE\Microsoft\Microsoft SDKs\Windows\v7.1A" -v "InstallationFolder" | grep -o '[A-Z]:\\.*')lib/x64
+WindowsSdkDir := $(shell reg query "HKLM\SOFTWARE\Microsoft\Microsoft SDKs\Windows\v7.1A" -v "InstallationFolder" | grep -o '[A-Z]:\\.*')
+WindowsSdkDir ?= $(shell reg query "HKLM\SOFTWARE\Microsoft\Microsoft SDKs\Windows\v7.0A" -v "InstallationFolder" | grep -o '[A-Z]:\\.*')
 
-WindowsSdkDirInc := $(shell reg query "HKLM\SOFTWARE\Microsoft\Microsoft SDKs\Windows\v7.0A" -v "InstallationFolder" | grep -o '[A-Z]:\\.*')Include
-WindowsSdkDirInc ?= $(shell reg query "HKLM\SOFTWARE\Microsoft\Microsoft SDKs\Windows\v7.1A" -v "InstallationFolder" | grep -o '[A-Z]:\\.*')Include
+WindowsSDKIncludeDir := $(shell cygpath -w "$(WindowsSdkDir)\Include")
+WindowsSDKGlIncludeDir := $(shell cygpath -w "$(WindowsSdkDir)\Include\gl")
+WindowsSDKLibDir := $(shell cygpath -w "$(WindowsSdkDir)\Lib\x64")
 
 HAVE_CDROM = 1
 
-INCFLAGS_PLATFORM = -I"$(WindowsSdkDirInc)"
-export INCLUDE := $(INCLUDE)
-export LIB := $(LIB);$(WindowsSdkDir)
+INCFLAGS_PLATFORM = -I"$(WindowsSDKIncludeDir)"
+export INCLUDE := $(INCLUDE);$(WindowsSDKIncludeDir);$(WindowsSDKGlIncludeDir)
+export LIB := $(LIB);$(WindowsSDKLibDir)
 TARGET := $(TARGET_NAME)_libretro.dll
 LDFLAGS += -DLL
 WINDOWS_VERSION=1
@@ -446,17 +485,18 @@ PATH := $(PATH):$(shell IFS=$$'\n'; cygpath "$(VS100COMNTOOLS)../IDE")
 LIB := $(shell IFS=$$'\n'; cygpath -w "$(VS100COMNTOOLS)../../VC/lib")
 INCLUDE := $(shell IFS=$$'\n'; cygpath "$(VS100COMNTOOLS)../../VC/include")
 
-WindowsSdkDir := $(shell reg query "HKLM\SOFTWARE\Microsoft\Microsoft SDKs\Windows\v7.0A" -v "InstallationFolder" | grep -o '[A-Z]:\\.*')lib
-WindowsSdkDir ?= $(shell reg query "HKLM\SOFTWARE\Microsoft\Microsoft SDKs\Windows\v7.1A" -v "InstallationFolder" | grep -o '[A-Z]:\\.*')lib
+WindowsSdkDir := $(shell reg query "HKLM\SOFTWARE\Microsoft\Microsoft SDKs\Windows\v7.1A" -v "InstallationFolder" | grep -o '[A-Z]:\\.*')
+WindowsSdkDir ?= $(shell reg query "HKLM\SOFTWARE\Microsoft\Microsoft SDKs\Windows\v7.0A" -v "InstallationFolder" | grep -o '[A-Z]:\\.*')
 
-WindowsSdkDirInc := $(shell reg query "HKLM\SOFTWARE\Microsoft\Microsoft SDKs\Windows\v7.0A" -v "InstallationFolder" | grep -o '[A-Z]:\\.*')Include
-WindowsSdkDirInc ?= $(shell reg query "HKLM\SOFTWARE\Microsoft\Microsoft SDKs\Windows\v7.1A" -v "InstallationFolder" | grep -o '[A-Z]:\\.*')Include
+WindowsSDKIncludeDir := $(shell cygpath -w "$(WindowsSdkDir)\Include")
+WindowsSDKGlIncludeDir := $(shell cygpath -w "$(WindowsSdkDir)\Include\gl")
+WindowsSDKLibDir := $(shell cygpath -w "$(WindowsSdkDir)\Lib")
 
 HAVE_CDROM = 1
+INCFLAGS_PLATFORM = -I"$(WindowsSDKIncludeDir)"
 
-INCFLAGS_PLATFORM = -I"$(WindowsSdkDirInc)"
-export INCLUDE := $(INCLUDE)
-export LIB := $(LIB);$(WindowsSdkDir)
+export INCLUDE := $(INCLUDE);$(WindowsSDKIncludeDir);$(WindowsSDKGlIncludeDir)
+export LIB := $(LIB);$(WindowsSDKLibDir)
 TARGET := $(TARGET_NAME)_libretro.dll
 LDFLAGS += -DLL
 WINDOWS_VERSION=1
@@ -472,12 +512,19 @@ INCLUDE := $(shell IFS=$$'\n'; cygpath -w "$(VS80COMNTOOLS)../../VC/include")
 LIB := $(shell IFS=$$'\n'; cygpath -w "$(VS80COMNTOOLS)../../VC/lib")
 BIN := $(shell IFS=$$'\n'; cygpath "$(VS80COMNTOOLS)../../VC/bin")
 
-WindowsSdkDir := $(INETSDK)
+WindowsSdkDir := $(shell reg query "HKLM\SOFTWARE\Microsoft\MicrosoftSDK\InstalledSDKs\8F9E5EF3-A9A5-491B-A889-C58EFFECE8B3" -v "Install Dir" | grep -o '[A-Z]:\\.*')
 
 HAVE_CDROM = 1
 
-export INCLUDE := $(INCLUDE);$(INETSDK)/Include;libretro-common/include/compat/msvc
-export LIB := $(LIB);$(WindowsSdkDir);$(INETSDK)/Lib
+WindowsSDKIncludeDir := $(shell cygpath -w "$(WindowsSdkDir)\Include")
+WindowsSDKAtlIncludeDir := $(shell cygpath -w "$(WindowsSdkDir)\Include\atl")
+WindowsSDKCrtIncludeDir := $(shell cygpath -w "$(WindowsSdkDir)\Include\crt")
+WindowsSDKGlIncludeDir := $(shell cygpath -w "$(WindowsSdkDir)\Include\gl")
+WindowsSDKMfcIncludeDir := $(shell cygpath -w "$(WindowsSdkDir)\Include\mfc")
+WindowsSDKLibDir := $(shell cygpath -w "$(WindowsSdkDir)\Lib")
+
+export INCLUDE := $(INCLUDE);$(WindowsSDKIncludeDir);$(WindowsSDKAtlIncludeDir);$(WindowsSDKCrtIncludeDir);$(WindowsSDKGlIncludeDir);$(WindowsSDKMfcIncludeDir);libretro-common/include/compat/msvc
+export LIB := $(LIB);$(WindowsSDKLibDir)
 TARGET := $(TARGET_NAME)_libretro.dll
 LDFLAGS += -DLL
 CFLAGS += -D_CRT_SECURE_NO_DEPRECATE
@@ -552,14 +599,20 @@ ifeq ($(NO_GCC),1)
    WARNINGS :=
 endif
 
-OBJECTS := $(SOURCES_CXX:.cpp=.o) $(SOURCES_C:.c=.o)
-
-all: $(TARGET)
-
-ifeq ($(DEBUG),0)
-   FLAGS += -O2 -DNDEBUG $(EXTRA_GCC_FLAGS)
-else
+ifeq ($(DEBUG),1)
    FLAGS += -O0 -g
+else
+   FLAGS += -O2 -DNDEBUG $(EXTRA_GCC_FLAGS)
+endif
+
+ifneq (,$(findstring msvc,$(platform)))
+   ifeq ($(DEBUG), 1)
+      CFLAGS += -MTd
+      CXXFLAGS += -MTd
+   else
+      CFLAGS += -MT
+      CXXFLAGS += -MT
+   endif
 endif
 
 LDFLAGS += $(fpic) $(SHARED)
@@ -590,7 +643,7 @@ endif
 endif
 
 CXXFLAGS += $(FLAGS)
-CFLAGS += $(FLAGS)
+CFLAGS   += $(FLAGS)
 
 OBJOUT   = -o 
 LINKOUT  = -o 
@@ -601,29 +654,16 @@ ifneq (,$(findstring msvc,$(platform)))
 ifeq ($(STATIC_LINKING),1)
 	LD ?= lib.exe
 	STATIC_LINKING=0
-
-	ifeq ($(DEBUG), 1)
-		CFLAGS += -MTd
-		CXXFLAGS += -MTd
-	else
-		CFLAGS += -MT
-		CXXFLAGS += -MT
-	endif
 else
 	LD = link.exe
-
-	ifeq ($(DEBUG), 1)
-		CFLAGS += -MDd
-		CXXFLAGS += -MDd
-	else
-		CFLAGS += -MD
-		CXXFLAGS += -MD
-	endif
 endif
 else
 	LD = $(CXX)
 endif
 
+OBJECTS := $(SOURCES_CXX:.cpp=.o) $(SOURCES_C:.c=.o)
+
+all: $(TARGET)
 $(TARGET): $(OBJECTS)
 ifeq ($(platform), emscripten)
 	$(CXX) $(CXXFLAGS) $(OBJOUT)$@ $^
